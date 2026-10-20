@@ -1,0 +1,256 @@
+{
+  "info": {
+    "name": "РИП ЛР3 — Tesla Parameters",
+    "description": "Веб-сервис третьей лабораторной. Вариант: Транспорт, Инфраструктура и Строительство №3 — расчёт остатка заряда аккумулятора Tesla Model S.\n\nПеред запуском: приложение поднято на http://localhost:3000, база наполнена (npm run migrate, затем scripts/seed.sql и scripts/seed-lab3.sql).\n\nПорядок показа: запросы идут сверху вниз, 1-10.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base", "value": "http://localhost:3000" },
+    { "key": "parameterId", "value": "1" },
+    { "key": "tripId", "value": "4" }
+  ],
+  "item": [
+    {
+      "name": "Услуга — параметр потребления",
+      "item": [
+        {
+          "name": "1. GET список с фильтрацией",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/api/parameters?minCurrent=10&maxCurrent=60&name=цикл",
+              "host": ["{{base}}"],
+              "path": ["api", "parameters"],
+              "query": [
+                { "key": "minCurrent", "value": "10", "description": "нижняя граница силы тока, А" },
+                { "key": "maxCurrent", "value": "60", "description": "верхняя граница силы тока, А" },
+                { "key": "name", "value": "цикл", "description": "подстрока в названии" }
+              ]
+            },
+            "description": "Фильтрация выполняется на бэкенде. Вместе со списком возвращается черновик текущего водителя: draftTripId и draftParametersCount — данные для иконки корзины."
+          }
+        },
+        {
+          "name": "2. GET одна услуга",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/api/parameters/{{parameterId}}",
+              "host": ["{{base}}"],
+              "path": ["api", "parameters", "{{parameterId}}"]
+            },
+            "description": "Удалённые записи клиенту не отдаются — вернётся 404."
+          }
+        },
+        {
+          "name": "3. POST добавление услуги с файлами",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "parameterName", "value": "Кондиционер в жару", "type": "text" },
+                { "key": "shortDescription", "value": "Компрессор кондиционера при температуре за бортом выше тридцати градусов.", "type": "text" },
+                { "key": "currentA", "value": "6.3", "type": "text" },
+                { "key": "powerW", "value": "2500", "type": "text" },
+                { "key": "image", "type": "file", "src": [], "description": "jpg, jpeg, png или webp, до 10 МБ" },
+                { "key": "video", "type": "file", "src": [], "description": "mp4 или webm, до 100 МБ" }
+              ]
+            },
+            "url": {
+              "raw": "{{base}}/api/parameters",
+              "host": ["{{base}}"],
+              "path": ["api", "parameters"]
+            },
+            "description": "Тело — multipart/form-data. Файлы уходят в Minio, в базу пишутся только имена объектов на латинице. Системные поля с клиента не принимаются: попытка передать id или status вернёт 400."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Связь многие-ко-многим",
+      "item": [
+        {
+          "name": "4. POST добавить услугу в заявку-черновик",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hours\": 2.5\n}"
+            },
+            "url": {
+              "raw": "{{base}}/api/parameters/{{parameterId}}/draft-trip",
+              "host": ["{{base}}"],
+              "path": ["api", "parameters", "{{parameterId}}", "draft-trip"]
+            },
+            "description": "Если черновика нет, он создаётся пустым: создатель, дата создания и статус выставляются автоматически. Отдельного POST для заявки не существует."
+          }
+        },
+        {
+          "name": "5. PUT изменить значение в связи",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hours\": 4\n}"
+            },
+            "url": {
+              "raw": "{{base}}/api/trips/{{tripId}}/parameters/{{parameterId}}",
+              "host": ["{{base}}"],
+              "path": ["api", "trips", "{{tripId}}", "parameters", "{{parameterId}}"]
+            },
+            "description": "Меняется продолжительность работы параметра за день. Первичный ключ таблицы связи в адресе не используется — только идентификаторы заявки и услуги."
+          }
+        },
+        {
+          "name": "6. DELETE убрать услугу из заявки",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/api/trips/{{tripId}}/parameters/{{parameterId}}",
+              "host": ["{{base}}"],
+              "path": ["api", "trips", "{{tripId}}", "parameters", "{{parameterId}}"]
+            },
+            "description": "Первичный ключ таблицы связи в адресе не используется."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Заявка — день поездки",
+      "item": [
+        {
+          "name": "7. GET список заявок с фильтрами",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/api/trips?status=завершена&formedFrom=2026-10-01&formedTo=2026-10-31",
+              "host": ["{{base}}"],
+              "path": ["api", "trips"],
+              "query": [
+                { "key": "status", "value": "завершена", "description": "сформирована, завершена или отклонена" },
+                { "key": "formedFrom", "value": "2026-10-01", "description": "дата формирования с" },
+                { "key": "formedTo", "value": "2026-10-31", "description": "дата формирования по" }
+              ]
+            },
+            "description": "Черновики и удалённые заявки не отдаются. В каждой строке логины создателя и модератора и вычисляемое по таблице связи поле parametersCount."
+          }
+        },
+        {
+          "name": "8. GET одна заявка с услугами",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base}}/api/trips/{{tripId}}",
+              "host": ["{{base}}"],
+              "path": ["api", "trips", "{{tripId}}"]
+            },
+            "description": "Поля заявки и её услуги: изображение, видео, часы работы и расход каждого параметра в киловатт-часах."
+          }
+        },
+        {
+          "name": "9. PUT сформировать заявку (создатель)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tripDate\": \"2026-10-20\",\n  \"startChargePercent\": 90\n}"
+            },
+            "url": {
+              "raw": "{{base}}/api/trips/{{tripId}}/form",
+              "host": ["{{base}}"],
+              "path": ["api", "trips", "{{tripId}}", "form"]
+            },
+            "description": "Проверяются обязательные поля, проставляется дата формирования и считается остаток заряда: расход = сила тока × 400 В × часы, ёмкость батареи 100 кВт·ч. Сформировать пустую заявку нельзя — вернётся 400."
+          }
+        },
+        {
+          "name": "10. PUT завершить или отклонить (модератор)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"завершить\"\n}"
+            },
+            "url": {
+              "raw": "{{base}}/api/trips/{{tripId}}/complete",
+              "host": ["{{base}}"],
+              "path": ["api", "trips", "{{tripId}}", "complete"]
+            },
+            "description": "Допустимые действия: завершить или отклонить. Проставляются модератор и дата завершения. Завершить черновик нельзя — вернётся 400."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Проверка ошибок",
+      "item": [
+        {
+          "name": "Системное поле с клиента — 400",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tripDate\": \"2026-10-20\",\n  \"startChargePercent\": 90,\n  \"status\": \"завершена\"\n}"
+            },
+            "url": {
+              "raw": "{{base}}/api/trips/{{tripId}}/form",
+              "host": ["{{base}}"],
+              "path": ["api", "trips", "{{tripId}}", "form"]
+            },
+            "description": "Поле status в DTO не описано, поэтому запрос отклоняется. Клиент не может задать статус сам."
+          }
+        },
+        {
+          "name": "Недопустимый переход статуса — 400",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"завершить\"\n}"
+            },
+            "url": {
+              "raw": "{{base}}/api/trips/4/complete",
+              "host": ["{{base}}"],
+              "path": ["api", "trips", "4", "complete"]
+            },
+            "description": "Заявка 4 — черновик. Модератор работает только со сформированными заявками."
+          }
+        },
+        {
+          "name": "Отрицательная сила тока — 400",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "parameterName", "value": "Проверка валидации", "type": "text" },
+                { "key": "currentA", "value": "-5", "type": "text" },
+                { "key": "powerW", "value": "1000", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{base}}/api/parameters",
+              "host": ["{{base}}"],
+              "path": ["api", "parameters"]
+            },
+            "description": "Сила тока не может быть отрицательной, название не короче трёх символов."
+          }
+        }
+      ]
+    }
+  ]
+}

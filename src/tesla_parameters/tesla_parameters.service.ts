@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Between,
@@ -11,7 +11,12 @@ import {
   TeslaParameter,
   TeslaParameterStatus,
 } from './entities/tesla-parameter.entity';
-import { CreateTeslaParameterDto } from './dto/create-tesla-parameter.dto';
+
+export interface CreateTeslaParameterData {
+  parameterName: string;
+  imageKey: string;
+  videoKey: string;
+}
 
 export interface PublishTeslaParameterData {
   shortDescription: string;
@@ -92,16 +97,16 @@ export class TeslaParametersService {
   // Если черновик уже есть — второй не создаётся.
   async createDraft(
     creatorId: number,
-    dto: CreateTeslaParameterDto,
+    data: CreateTeslaParameterData,
   ): Promise<TeslaParameter> {
     const existingDraft = await this.findDraft(creatorId);
     if (existingDraft) {
       return existingDraft;
     }
     const draft = this.teslaParameterRepository.create({
-      parameterName: dto.parameterName,
-      imageKey: dto.imageKey,
-      videoKey: dto.videoKey,
+      parameterName: data.parameterName,
+      imageKey: data.imageKey,
+      videoKey: data.videoKey,
       status: TeslaParameterStatus.Draft,
       creatorId,
     });
@@ -121,17 +126,46 @@ export class TeslaParametersService {
     draft.currentA = data.currentA;
     draft.powerW = data.powerW;
     draft.status = TeslaParameterStatus.Published;
-    draft.formedAt = new Date();
     return this.teslaParameterRepository.save(draft);
   }
 
-  // Логическое удаление: сырой SQL UPDATE, без ORM
+  // Логическое удаление: сырой SQL через курсор, без ORM.
+  //
+  // Курсор объявляется на выборке из одной строки, открывается,
+  // читается командой FETCH и закрывается. Обновление выполняется
+  // по позиции курсора — WHERE CURRENT OF. Запись физически остаётся
+  // в таблице, меняется только статус.
   async deleteParameterWithSql(id: number): Promise<void> {
-    await this.teslaParameterRepository.query(
-      `UPDATE tesla_parameters
-          SET status = $1
-        WHERE id = $2 AND status = $3`,
-      [TeslaParameterStatus.Deleted, id, TeslaParameterStatus.Published],
-    );
+    // Блок DO не принимает параметры запроса, поэтому идентификатор
+    // подставляется в текст. Чтобы подстановка была безопасной,
+    // он приводится к целому числу и проверяется.
+    const parameterId = Number.parseInt(String(id), 10);
+    if (!Number.isInteger(parameterId) || parameterId <= 0) {
+      throw new BadRequestException('Некорректный идентификатор параметра');
+    }
+
+    await this.teslaParameterRepository.query(`
+      DO $$
+      DECLARE
+        parameter_cursor CURSOR FOR
+          SELECT id, status
+            FROM tesla_parameters
+           WHERE id = ${parameterId}
+             AND status = 'опубликован'
+             FOR UPDATE;
+        found_row record;
+      BEGIN
+        OPEN parameter_cursor;
+        FETCH parameter_cursor INTO found_row;
+
+        IF FOUND THEN
+          UPDATE tesla_parameters
+             SET status = 'удален'
+           WHERE CURRENT OF parameter_cursor;
+        END IF;
+
+        CLOSE parameter_cursor;
+      END $$;
+    `);
   }
 }

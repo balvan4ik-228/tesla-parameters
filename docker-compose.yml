@@ -20,7 +20,7 @@ services:
     environment:
       POSTGRES_USER: tesla
       POSTGRES_PASSWORD: tesla_password
-      POSTGRES_DB: tesla_charge
+      POSTGRES_DB: tesla_parameters
     ports:
       - "5432:5432"
     volumes:

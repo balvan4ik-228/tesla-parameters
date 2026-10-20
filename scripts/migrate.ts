@@ -1,7 +1,4 @@
 import { DataSource } from 'typeorm';
-import { Driver } from '../src/tesla_parameters/entities/driver.entity';
-import { TeslaParameter } from '../src/tesla_parameters/entities/tesla-parameter.entity';
-import { TeslaParameterLike } from '../src/tesla_parameters/entities/tesla-parameter-like.entity';
 
 const dataSource = new DataSource({
   type: 'postgres',
@@ -10,7 +7,9 @@ const dataSource = new DataSource({
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
-  entities: [Driver, TeslaParameter, TeslaParameterLike],
+  // Сущности задаются маской: прямые импорты не резолвятся,
+  // потому что ts-node разбирает файл как ES-модуль
+  entities: ['src/tesla_parameters/entities/*.entity.ts'],
   synchronize: true,
 });
 

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TeslaParametersModule } from './tesla_parameters/tesla_parameters.module';
+import { ApiModule } from './api/api.module';
 
 @Module({
   imports: [
@@ -21,7 +22,10 @@ import { TeslaParametersModule } from './tesla_parameters/tesla_parameters.modul
         synchronize: false,
       }),
     }),
+    // Страницы лабораторных 1 и 2
     TeslaParametersModule,
+    // Веб-сервис лабораторной 3
+    ApiModule,
   ],
 })
 export class AppModule {}

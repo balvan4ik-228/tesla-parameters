@@ -10,9 +10,13 @@ import {
   Query,
   Redirect,
   Render,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { TeslaParametersService } from './tesla_parameters.service';
 import { MinioObjectsService } from './minio-objects.service';
+import { MinioUploadService, UploadedFile } from './minio-upload.service';
 import { CreateTeslaParameterDto } from './dto/create-tesla-parameter.dto';
 import { PublishTeslaParameterDto } from './dto/publish-tesla-parameter.dto';
 import { CURRENT_DRIVER_ID } from './current-driver';
@@ -29,6 +33,7 @@ export class TeslaParametersController {
   constructor(
     private readonly teslaParametersService: TeslaParametersService,
     private readonly minioObjectsService: MinioObjectsService,
+    private readonly minioUploadService: MinioUploadService,
   ) {}
 
   // GET /parameter-feed, /parameter-feed/:parameterId, ?next=true
@@ -71,33 +76,55 @@ export class TeslaParametersController {
   async getParameterDraft() {
     const draft = await this.teslaParametersService.findDraft(CURRENT_DRIVER_ID);
 
-    // Файлы выбираются из бакета Minio только до нажатия «Далее»
-    const mediaKeys = draft
-      ? { imageKeys: [], videoKeys: [] }
-      : await this.minioObjectsService.listMediaKeys();
-
     return {
       title: 'Новый параметр потребления',
       activeTab: { draft: true },
       parameter: draft ? this.toView(draft) : null,
-      imageKeys: mediaKeys.imageKeys,
-      videoKeys: mediaKeys.videoKeys,
     };
   }
 
-  // POST /parameter-draft — кнопка «Далее»
+  // POST /parameter-draft — кнопка «Далее».
+  // Фото и видео приходят из проводника: форма отправляется
+  // как multipart/form-data, файлы уходят в бакет Minio,
+  // в базе сохраняются только их имена на латинице.
   @Post('parameter-draft')
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'image', maxCount: 1 },
+      { name: 'video', maxCount: 1 },
+    ]),
+  )
   @Redirect('/parameter-draft', 302)
-  async createParameterDraft(@Body() dto: CreateTeslaParameterDto) {
+  async createParameterDraft(
+    @Body() dto: CreateTeslaParameterDto,
+    @UploadedFiles()
+    files: { image?: UploadedFile[]; video?: UploadedFile[] },
+  ) {
     const parameterName = (dto.parameterName ?? '').trim();
-    const imageKey = (dto.imageKey ?? '').trim();
-    const videoKey = (dto.videoKey ?? '').trim();
+    const image = files?.image?.[0];
+    const video = files?.video?.[0];
 
-    if (!parameterName || !imageKey || !videoKey) {
-      throw new BadRequestException('Выберите фото, видео и укажите название');
+    if (!parameterName) {
+      throw new BadRequestException('Укажите название параметра');
     }
     if (parameterName.length > 100) {
       throw new BadRequestException('Название длиннее 100 символов');
+    }
+    if (!image) {
+      throw new BadRequestException('Выберите фото параметра');
+    }
+    if (!video) {
+      throw new BadRequestException('Выберите видео параметра');
+    }
+
+    const imageKey = await this.minioUploadService.uploadImage(image);
+    let videoKey: string;
+    try {
+      videoKey = await this.minioUploadService.uploadVideo(video);
+    } catch (error) {
+      // Фото уже в бакете — убираем, чтобы не оставлять лишний файл
+      await this.minioUploadService.remove(imageKey);
+      throw error;
     }
 
     await this.teslaParametersService.createDraft(CURRENT_DRIVER_ID, {

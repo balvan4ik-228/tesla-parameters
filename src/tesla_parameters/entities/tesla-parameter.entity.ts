@@ -1,6 +1,5 @@
 import {
   Column,
-  CreateDateColumn,
   Entity,
   Index,
   JoinColumn,
@@ -70,13 +69,6 @@ export class TeslaParameter {
   // Поле по теме: потребляемая мощность, Вт
   @Column({ name: 'power_w', type: 'integer', nullable: true })
   powerW: number | null;
-
-  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
-  createdAt: Date;
-
-  // Дата формирования — проставляется при публикации
-  @Column({ name: 'formed_at', type: 'timestamp', nullable: true })
-  formedAt: Date | null;
 
   @Column({ name: 'creator_id', type: 'integer' })
   creatorId: number;

@@ -16,6 +16,10 @@ async function bootstrap() {
   app.setViewEngine('hbs');
   hbs.registerPartials(join(__dirname, '..', 'views', 'partials'));
 
+  // Валидация включена только на контроллерах веб-сервиса (/api).
+  // Глобально её ставить нельзя: страницы лабораторных 1 и 2 шлют формы,
+  // и строгий режим вырезал бы из них все поля.
+
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

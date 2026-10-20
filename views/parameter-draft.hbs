@@ -8,7 +8,9 @@
     <h1 class="page-title">Новый параметр</h1>
 
     {{#if parameter}}
-      {{!-- Черновик создан: вводится только то, чего ещё нет --}}
+      {{!-- Состояние 2: черновик создан.
+            Загруженные фото и видео показаны, выбор файлов недоступен.
+            Вводится только то, чего ещё нет. --}}
       <section class="field-group">
         <img class="field-image" src="{{parameter.imageUrl}}" alt="{{parameter.parameterName}}">
         <video class="field-video"
@@ -48,27 +50,23 @@
       <p class="draft-status">Статус: {{parameter.status}}</p>
 
     {{else}}
-      {{!-- Черновика нет: выбор файлов из Minio и название --}}
-      <form method="POST" action="/parameter-draft">
+      {{!-- Состояние 1: черновика нет.
+            Фото и видео выбираются из проводника, поля идут друг под другом.
+            Выбор доступен только до нажатия «Далее». --}}
+      <form method="POST" action="/parameter-draft" enctype="multipart/form-data">
         <section class="field-group">
           <label class="field">
             <span class="field-label">Фото параметра</span>
-            <select class="field-input" name="imageKey" required>
-              <option value="" disabled selected>Выберите фото</option>
-              {{#each imageKeys}}
-                <option value="{{this}}">{{this}}</option>
-              {{/each}}
-            </select>
+            <input class="field-input field-file" type="file" name="image"
+                   accept=".jpg,.jpeg,.png,.webp" required>
+            <span class="field-hint">jpg, jpeg, png или webp, до 10 МБ</span>
           </label>
 
           <label class="field">
             <span class="field-label">Видео параметра</span>
-            <select class="field-input" name="videoKey" required>
-              <option value="" disabled selected>Выберите видео</option>
-              {{#each videoKeys}}
-                <option value="{{this}}">{{this}}</option>
-              {{/each}}
-            </select>
+            <input class="field-input field-file" type="file" name="video"
+                   accept=".mp4,.webm" required>
+            <span class="field-hint">mp4 или webm, до 100 МБ</span>
           </label>
 
           <label class="field">
